@@ -5,8 +5,9 @@ import os
 import json
 import pandas as pd
 from dotenv import load_dotenv
+from openai import OpenAI
 from llama_index.core import Settings
-from llama_index.llms.openai import OpenAI
+from llama_index.llms.openai import OpenAI as LlamaOpenAI
 from llama_index.tools.mcp import BasicMCPClient, McpToolSpec
 from llama_index.core.llms import ChatMessage
 from llama_index.core.agent.workflow import FunctionAgent, ToolCallResult, ToolCall
@@ -18,7 +19,6 @@ from streamlit_extras.bottom_container import bottom
 st.title("🤖 Demo - Servidor MCP HBr - CIIA")
 st.divider()
 
-# Carrega a API key de um arquivo .env nesse repositório
 load_dotenv()
 nest_asyncio.apply()
 
@@ -43,8 +43,8 @@ para interagir com nossa base de dados.
 """
 
 async def get_agent():
-    api_key = os.getenv('sua_api_key') #"OPENAI_API_KEY do .env"
-    llm = OpenAI(model="gpt-4o-mini", api_key=api_key)
+    api_key = os.getenv("OPENAI_API_KEY")
+    llm = LlamaOpenAI(model="gpt-4o-mini", api_key=api_key)
     Settings.llm = llm
 
     mcp_client = BasicMCPClient("http://127.0.0.1:8000/sse")
@@ -82,7 +82,7 @@ def run_async(coro):
     return task.result()
 
 
-container = st.container(height=570, border=True)
+container = st.container(height=470, border=True)
 
 
 # Mensagem de boas-vindas
@@ -99,51 +99,92 @@ else:
         else:
             container.chat_message("assistant").write(msg.content)
 
-# Chat
-prompt = st.chat_input("Digite algo...", accept_file=True, file_type=['jpg', 'csv'])
+my_input = chat_input_widget()
 
-if prompt and prompt.text:
-    container.chat_message("user").write(prompt.text)
-    agent, agent_ctx = run_async(get_agent())
-    response = run_async(handle_user_message(prompt.text, agent, agent_ctx))
-
-    try:
-        print("ENTREI AQUI")
-        response_json = json.loads(response)
-        print(response_json)
-        if isinstance(response_json, dict) and response_json.get("type") == "bar_chart":
-            df = pd.DataFrame({
-                response_json["x_label"]: response_json["x"],
-                response_json["y_label"]: response_json["y"]
-            })
-            container.chat_message("assistant").bar_chart(df, 
-                x=response_json["x_label"], 
-                y=response_json["y_label"]
-            )
-        else:
-            container.chat_message("assistant").write(response)
-    except json.JSONDecodeError:
+if my_input:
+    if "text" in my_input:
+        user_text = my_input["text"]
+        container.chat_message("user").write(user_text)
+        agent, agent_ctx = run_async(get_agent())
+        response = run_async(handle_user_message(user_text, agent, agent_ctx))
         container.chat_message("assistant").write(response)
 
-    # container.chat_message("assistant").write(response)
+        new_msgs = []
+        new_msgs.append(ChatMessage(role="user", content=user_text))
+        new_msgs.append(ChatMessage(role="assistant", content=response))
 
-    new_msgs = []
-    new_msgs.append(ChatMessage(role="user", content=prompt.text))
-    new_msgs.append(ChatMessage(role="assistant", content=response))
+        memory = st.session_state['memory']
+        memory.put_messages(new_msgs)
+        st.session_state['memory'] = memory
 
-    memory = st.session_state['memory']
-    memory.put_messages(new_msgs)
-    st.session_state['memory'] = memory
+    elif "audioFile" in my_input:
+        audio_bytes = bytes(my_input["audioFile"])
+        webm_file_path = "audio_transcrito.mp3"
 
-if prompt and prompt["files"]:
-    st.image(prompt["files"][0])
+        with open(webm_file_path, "wb") as f:
+            f.write(audio_bytes)
+
+            audio_file = open("audio_transcrito.mp3", "rb")
+            api_key = os.getenv("OPENAI_API_KEY")
+            client = OpenAI(api_key=api_key)
+
+            transcription = client.audio.transcriptions.create(
+                model = 'whisper-1',
+                file = audio_file,
+                prompt = 'Faça a transcrição precisa do arquivo de áudio'
+            )
+
+            user_text = transcription.text
+            container.chat_message("user").write(user_text)
+            agent, agent_ctx = run_async(get_agent())
+            response = run_async(handle_user_message(user_text, agent, agent_ctx))
+            container.chat_message("assistant").write(response)
+
+            new_msgs = []
+            new_msgs.append(ChatMessage(role="user", content=user_text))
+            new_msgs.append(ChatMessage(role="assistant", content=response))
+
+            memory = st.session_state['memory']
+            memory.put_messages(new_msgs)
+            st.session_state['memory'] = memory
+
+        st.markdown(transcription.text)
 
 
-# my_input = chat_input_widget()
+# Chat
+# prompt = st.chat_input("Digite algo...", accept_file=True, file_type=['jpg', 'csv'])
 
-# if my_input:
-#         if "text" in my_input:
-#             user_text = my_input["text"]
-#         elif "audioFile" in my_input:
-#             audio_bytes = bytes(my_input["audioFile"])
-#             st.audio(audio_bytes)
+# if prompt and prompt.text:
+#     container.chat_message("user").write(prompt.text)
+#     agent, agent_ctx = run_async(get_agent())
+#     response = run_async(handle_user_message(prompt.text, agent, agent_ctx))
+
+#     try:
+#         response_json = json.loads(response)
+#         print(response_json)
+#         if isinstance(response_json, dict) and response_json.get("type") == "bar_chart":
+#             df = pd.DataFrame({
+#                 response_json["x_label"]: response_json["x"],
+#                 response_json["y_label"]: response_json["y"]
+#             })
+#             container.chat_message("assistant").bar_chart(df, 
+#                 x=response_json["x_label"], 
+#                 y=response_json["y_label"]
+#             )
+#         else:
+#             container.chat_message("assistant").write(response)
+#     except json.JSONDecodeError:
+#         container.chat_message("assistant").write(response)
+
+#     # container.chat_message("assistant").write(response)
+
+#     new_msgs = []
+#     new_msgs.append(ChatMessage(role="user", content=prompt.text))
+#     new_msgs.append(ChatMessage(role="assistant", content=response))
+
+#     memory = st.session_state['memory']
+#     memory.put_messages(new_msgs)
+#     st.session_state['memory'] = memory
+
+# if prompt and prompt["files"]:
+#     st.image(prompt["files"][0])
