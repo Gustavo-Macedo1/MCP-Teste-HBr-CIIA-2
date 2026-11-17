@@ -9,7 +9,7 @@
 Descrição
 ---------
 
-Este repositório contém um servidor MCP (Model-Chain-Provider) simples feito com FastMCP para expor ferramentas (tools) que interagem com uma base MySQL. O projeto também inclui um app Streamlit (`app.py`) que consome essas tools via Llama Index (usando `BasicMCPClient`) e pode criar um agente que chama as ferramentas registradas no servidor.
+Este repositório contém um servidor MCP (Model-Context-Protocol) simples feito com FastMCP para expor ferramentas (tools) que interagem com uma base MySQL. O projeto também inclui um app Streamlit (`app.py`) que consome essas tools via Llama Index (usando `BasicMCPClient`) e pode criar um agente que chama as ferramentas registradas no servidor.
 
 Principais componentes
 - `servidor.py` — servidor MCP que registra ferramentas (tools) para manipular a tabela `tomografo`.
